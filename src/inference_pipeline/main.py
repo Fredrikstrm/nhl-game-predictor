@@ -27,19 +27,6 @@ logger = logging.getLogger(__name__)
 def fetch_historical_data_for_features(api_client: NHLAPIClient, days_back: int = 90) -> pd.DataFrame:
     """
     Fetch historical games needed for feature computation.
-    
-    Why we need this: To compute rolling features (win streaks, recent performance, 
-    goal differentials, head-to-head records) for upcoming games, we need historical 
-    game data from the past 90 days.
-    
-    Note: This is NOT for training - it's for computing features for each upcoming game.
-    For example, to know "Team A's win streak" or "Team A's recent goal differential",
-    we need their recent game history. The 90 days provides enough data to compute
-    meaningful rolling statistics (e.g., last 10 games performance).
-    
-    The training data (640 games) was used to train the model. This historical data
-    (also ~640 games over 90 days) is used to compute features for NEW games that
-    haven't been played yet. This is the correct approach.
     """
     from datetime import timedelta
     import pandas as pd
@@ -63,36 +50,28 @@ def fetch_historical_data_for_features(api_client: NHLAPIClient, days_back: int 
     
     games_data = []
     for game in games:
-        # Check if game is final - API structure may vary
-        game_status = game.get("gameState") or game.get("status", {}).get("detailedState") or game.get("gameStatus")
+        # Check if game is final
+        game_status = game.get("gameState")
         is_final = game_status in ["OFF", "FINAL", "Final", "OFFICIAL"]
         
         if not is_final:
             continue
         
-        # Extract team information - handle different response structures
-        home_team = game.get('homeTeam') or game.get('teams', {}).get('home', {}).get('team', {})
-        away_team = game.get('awayTeam') or game.get('teams', {}).get('away', {}).get('team', {})
+
+        home_team = game.get('homeTeam', {})
+        away_team = game.get('awayTeam', {})
         
-        # Get scores - handle different response structures
-        home_score = (game.get('homeTeamScore') or 
-                     game.get('homeScore') or 
-                     game.get('teams', {}).get('home', {}).get('score') or
-                     game.get('homeTeam', {}).get('score') or
-                     game.get('home', {}).get('score'))
-        away_score = (game.get('awayTeamScore') or 
-                     game.get('awayScore') or 
-                     game.get('teams', {}).get('away', {}).get('score') or
-                     game.get('awayTeam', {}).get('score') or
-                     game.get('away', {}).get('score'))
+        # Get scores (API structure: homeTeam.score and awayTeam.score)
+        home_score = home_team.get('score')
+        away_score = away_team.get('score')
         
         # Get team IDs
-        home_team_id = home_team.get('id') if isinstance(home_team, dict) else None
-        away_team_id = away_team.get('id') if isinstance(away_team, dict) else None
+        home_team_id = home_team.get('id')
+        away_team_id = away_team.get('id')
         
-        # Get game ID and date
-        game_id = game.get('id') or game.get('gamePk') or game.get('gameId')
-        game_date_str = game.get('startTimeUTC') or game.get('gameDate') or game.get('date')
+        # Get game ID and date (API structure: id, gameDate, startTimeUTC)
+        game_id = game.get('id')
+        game_date_str = game.get('startTimeUTC') or game.get('gameDate')
         
         if game_id and home_team_id and away_team_id:
             # Convert scores to integers
@@ -116,7 +95,7 @@ def fetch_historical_data_for_features(api_client: NHLAPIClient, days_back: int 
 
 def _transform_games_for_team(team_games: pd.DataFrame, team_id: int) -> pd.DataFrame:
     """
-    Transform games DataFrame to team perspective (add won, goals_for, goals_against, is_home columns)
+    Transform games DataFrame to team perspective
     Same function as in feature_pipeline/main.py
     """
     if len(team_games) == 0:
@@ -140,7 +119,6 @@ def _transform_games_for_team(team_games: pd.DataFrame, team_id: int) -> pd.Data
     )
     
     # Compute won column from team's perspective
-    # Team wins if: (team is home and home_team_won=1) OR (team is away and home_team_won=0)
     team_df['won'] = (
         (team_df['is_home'] == 1) & (team_df['home_team_won'] == 1)
     ) | (
@@ -158,35 +136,23 @@ def build_team_name_mapping(games: list, historical_games: pd.DataFrame = None) 
     """
     team_mapping = {}
     
-    # Extract from upcoming games
+    # Extract from upcoming games (API structure: homeTeam/awayTeam objects)
     for game in games:
-        home_team = game.get('homeTeam') or game.get('teams', {}).get('home', {}).get('team', {})
-        away_team = game.get('awayTeam') or game.get('teams', {}).get('away', {}).get('team', {})
+        home_team = game.get('homeTeam', {})
+        away_team = game.get('awayTeam', {})
         
-        if isinstance(home_team, dict):
+        # Extract team names (API structure: name.default or abbrev)
+        if home_team:
             team_id = home_team.get('id')
-            # Try multiple possible name fields
-            team_name = (home_team.get('name') or 
-                        home_team.get('teamName') or 
-                        home_team.get('name', {}).get('default') or
-                        home_team.get('abbrev') or
-                        '')
+            team_name = home_team.get('name', {}).get('default') or home_team.get('abbrev', '')
             if team_id and team_name:
                 team_mapping[team_id] = team_name
         
-        if isinstance(away_team, dict):
+        if away_team:
             team_id = away_team.get('id')
-            team_name = (away_team.get('name') or 
-                        away_team.get('teamName') or 
-                        away_team.get('name', {}).get('default') or
-                        away_team.get('abbrev') or
-                        '')
+            team_name = away_team.get('name', {}).get('default') or away_team.get('abbrev', '')
             if team_id and team_name:
                 team_mapping[team_id] = team_name
-    
-    # Also try to extract from historical games if available
-    # Historical games might have team names in a different format
-    # For now, we'll rely on upcoming games for the mapping
     
     return team_mapping
 
@@ -198,14 +164,14 @@ def compute_features_for_upcoming_game(
     team_name_mapping: dict = None
 ) -> pd.DataFrame:
     """Compute features for a single upcoming game"""
-    # Extract team information - handle different response structures
-    home_team = game.get('homeTeam') or game.get('teams', {}).get('home', {}).get('team', {})
-    away_team = game.get('awayTeam') or game.get('teams', {}).get('away', {}).get('team', {})
+    # Extract game information (API structure: id, homeTeam/awayTeam objects)
+    home_team = game.get('homeTeam', {})
+    away_team = game.get('awayTeam', {})
     
-    game_id = game.get('id') or game.get('gamePk') or game.get('gameId')
-    home_team_id = home_team.get('id') if isinstance(home_team, dict) else None
-    away_team_id = away_team.get('id') if isinstance(away_team, dict) else None
-    game_date_str = game.get('startTimeUTC') or game.get('gameDate') or game.get('date')
+    game_id = game.get('id')
+    home_team_id = home_team.get('id')
+    away_team_id = away_team.get('id')
+    game_date_str = game.get('startTimeUTC') or game.get('gameDate')
     
     if not game_id or not home_team_id or not away_team_id:
         return pd.DataFrame()
@@ -240,23 +206,9 @@ def compute_features_for_upcoming_game(
         historical, home_team_id, away_team_id
     )
     
-    # Get team names - try multiple sources
-    home_team_name = ''
-    away_team_name = ''
-    
-    if isinstance(home_team, dict):
-        home_team_name = (home_team.get('name') or 
-                         home_team.get('teamName') or 
-                         (home_team.get('name', {}).get('default') if isinstance(home_team.get('name'), dict) else None) or
-                         home_team.get('abbrev') or
-                         '')
-    
-    if isinstance(away_team, dict):
-        away_team_name = (away_team.get('name') or 
-                         away_team.get('teamName') or 
-                         (away_team.get('name', {}).get('default') if isinstance(away_team.get('name'), dict) else None) or
-                         away_team.get('abbrev') or
-                         '')
+    # Get team names (API structure: name.default or abbrev)
+    home_team_name = home_team.get('name', {}).get('default') or home_team.get('abbrev', '')
+    away_team_name = away_team.get('name', {}).get('default') or away_team.get('abbrev', '')
     
     # Fallback to team_name_mapping if names are still empty
     if not home_team_name and team_name_mapping and home_team_id in team_name_mapping:
@@ -286,7 +238,6 @@ def compute_features_for_upcoming_game(
 
 def generate_predictions(model, features_df: pd.DataFrame, training_feature_cols: list = None) -> pd.DataFrame:
     """Generate predictions using the trained model"""
-    # Exclude non-feature columns (must match training pipeline)
     exclude_cols = ['game_id', 'game_date', 'home_team_id', 'away_team_id', 
                     'home_team_name', 'away_team_name', 'home_team_won']
     
@@ -370,8 +321,7 @@ def main():
     logger.info(f"Fetching upcoming games for next {days_ahead} days")
     all_upcoming_games = api_client.get_upcoming_games(days_ahead=days_ahead)
     
-    # Filter to only include scheduled games (not final, not cancelled) within date range
-    # Use UTC for consistent date comparison (GitHub Actions runs in UTC)
+    # Filter to only include scheduled games
     now_utc = datetime.now(timezone.utc)
     today_utc = now_utc.date()
     end_date = today_utc + timedelta(days=days_ahead)
@@ -380,8 +330,8 @@ def main():
     
     upcoming_games = []
     for game in all_upcoming_games:
-        # Check game status - only include scheduled/upcoming games
-        game_status = game.get("gameState") or game.get("status", {}).get("detailedState") or game.get("gameStatus")
+        # Check game status
+        game_status = game.get("gameState")
         # Exclude games that are already finished (FINAL/OFFICIAL)
         is_final = game_status in ["OFF", "FINAL", "Final", "OFFICIAL"]
         is_cancelled = game_status in ["CANCELLED", "POSTPONED", "DELAYED"]
@@ -391,7 +341,7 @@ def main():
             continue
         
         # Check game date is in the future and within range
-        game_date_str = game.get('startTimeUTC') or game.get('gameDate') or game.get('date')
+        game_date_str = game.get('startTimeUTC') or game.get('gameDate')
         if game_date_str:
             try:
                 # Parse game date (assume UTC if timezone not specified)

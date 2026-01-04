@@ -1,101 +1,90 @@
-# NHL Game Outcome and Win Probability Predictor
+# NHL Game Predictor
 
-A scalable machine learning system that predicts NHL game outcomes (1-3 days ahead) using dynamic data from the NHL Stats API and follows the Feature, Training, Inference (FTI) pipeline pattern.
+**Course**: Scalable Machine Learning (ID2223)  
+**Author**: Fredrik Ström (frest@kth.se)
+
+A scalable ML system that predicts NHL game outcomes using the Feature, Training, Inference (FTI) pipeline pattern.
+
+## Project Overview
+
+### 1. Dynamic Data Source
+Uses the **NHL Stats API** (`https://api-web.nhle.com`) which provides:
+- Daily updated game schedules and results
+- Real-time team statistics
+- Historical game data
+- No static datasets - all data is fetched dynamically
+
+### 2. Prediction Problem
+Predicts **NHL game outcomes** (home team win probability) for upcoming games **1-3 days ahead**, using:
+- Team performance metrics (win streaks, goal differentials)
+- Head-to-head historical records
+- Home/away performance statistics
+
+### 3. User Interface
+**Web Dashboard** displaying:
+- Upcoming NHL games with predicted win probabilities
+- Visual probability indicators for each team
+- Predicted winners
+- Available at: [GitHub Pages](https://fredrikstrm.github.io/nhl-game-predictor/) or locally at `http://localhost:5001`
+
+### 4. Technologies
+- **Python 3.11** - Core language
+- **Hopsworks** - Feature Store & Model Registry
+- **XGBoost** - Gradient boosted tree model
+- **Flask** - Web dashboard framework
+- **NHL Stats API** - Dynamic data source
+- **GitHub Actions** - Automated inference and deployment
+
+## Quick Start
+
+1. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Configure environment:**
+   - Copy `.env.example` to `.env`
+   - Add your Hopsworks API key and project name
+
+3. **Run pipelines:**
+   ```bash
+   # 1. Fetch data and compute features
+   python src/feature_pipeline/main.py
+   
+   # 2. Train model
+   python src/training_pipeline/main.py
+   
+   # 3. Generate predictions
+   python src/inference_pipeline/main.py
+   
+   # 4. Start dashboard (optional)
+   python src/dashboard/app.py
+   ```
 
 ## Project Structure
 
 ```
-project/
-├── src/
-│   ├── feature_pipeline/      # Feature engineering and data ingestion
-│   ├── training_pipeline/      # Model training and registration
-│   ├── inference_pipeline/     # Prediction generation
-│   ├── dashboard/              # Web dashboard UI
-│   ├── utils/                  # Shared utilities
-│   └── config/                 # Configuration files
-├── data/                       # Local data storage (optional)
-├── requirements.txt            # Python dependencies
-├── config.yaml                 # Configuration settings
-├── .env.example               # Environment variables template
-└── README.md                  # This file
+src/
+├── feature_pipeline/    # Fetches NHL data, computes features
+├── training_pipeline/   # Trains XGBoost model
+├── inference_pipeline/  # Generates predictions
+├── dashboard/          # Web UI for predictions
+└── utils/              # Shared utilities (API client, feature engineering)
 ```
 
-## Components
+## Features
 
-### 1. Feature Pipeline
-- Fetches daily NHL data from the NHL Stats API
-- Computes rolling features:
-  - Recent team performance (win/loss streaks)
-  - Goal differential
-  - Special teams efficiency (power play, penalty kill)
-  - Goalie form and save percentage
-  - Head-to-head records
-- Stores features in Hopsworks Feature Store
+The model uses **21 working features** including:
+- Team win/loss streaks
+- Recent goal differentials
+- Head-to-head records
+- Home/away performance
 
-### 2. Training Pipeline
-- Trains gradient-boosted tree models (XGBoost/LightGBM)
-- Uses historical game data and features from feature store
-- Evaluates model performance
-- Registers trained models in Hopsworks Model Registry
+Note: Power play and penalty kill stats default to 0.0 (API limitation).
 
-### 3. Inference Pipeline
-- Generates predictions for upcoming games (1-3 days ahead)
-- Uses registered model from Model Registry
-- Outputs win probabilities for each team
+## Configuration
 
-### 4. Dashboard
-- Simple web UI displaying:
-  - List of upcoming games
-  - Predicted win probabilities for each team
-  - Model confidence metrics
-
-## Setup
-
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-2. Configure environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your Hopsworks API key and project settings
-```
-
-3. Configure settings in `config.yaml`
-
-## Usage
-
-### Run Feature Pipeline
-```bash
-python src/feature_pipeline/main.py
-```
-
-### Run Training Pipeline
-```bash
-python src/training_pipeline/main.py
-```
-
-### Run Inference Pipeline
-```bash
-python src/inference_pipeline/main.py
-```
-
-### Start Dashboard
-```bash
-python src/dashboard/app.py
-```
-
-## Data Source
-
-- **NHL Stats API**: https://statsapi.web.nhl.com/api/v1/
-- Provides game schedules, results, player statistics, team metrics
-
-## Technologies
-
-- Python 3.8+
-- Hopsworks (Feature Store & Model Registry)
-- XGBoost/LightGBM (ML models)
-- Flask/FastAPI (Dashboard)
-- Pandas, NumPy (Data processing)
-
+Edit `config.yaml` to adjust:
+- Prediction horizon (default: 3 days)
+- Training data window (default: 365 days)
+- Model hyperparameters

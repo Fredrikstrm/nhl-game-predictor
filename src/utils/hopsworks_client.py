@@ -75,7 +75,6 @@ class HopsworksClient:
             "project": self.project_name
         }
         
-        # Add host if provided
         if self.host:
             login_params["host"] = self.host
         
@@ -91,77 +90,28 @@ class HopsworksClient:
         primary_key: list = None
     ):
         """Get existing feature group or create a new one"""
-        # #region agent log
-        import json
-        try:
-            with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"hopsworks_client.py:get_or_create_feature_group","message":"Function entry","data":{"name":name,"version":version},"timestamp":int(__import__('time').time()*1000)})+'\n')
-        except: pass
-        # #endregion
-        
         try:
             fg = self.fs.get_feature_group(name=name, version=version)
-            
-            # #region agent log
-            try:
-                with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"hopsworks_client.py:get_or_create_feature_group","message":"After get_feature_group","data":{"fg_is_none":fg is None,"fg_type":str(type(fg)) if fg is not None else "None"},"timestamp":int(__import__('time').time()*1000)})+'\n')
-            except: pass
-            # #endregion
             
             if fg is None:
                 raise ValueError(f"get_feature_group returned None for {name} v{version}")
             
             logger.info(f"Retrieved existing feature group: {name} v{version}")
-            
-            # #region agent log
-            try:
-                with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"hopsworks_client.py:get_or_create_feature_group","message":"Function exit (existing)","data":{"fg_is_none":fg is None},"timestamp":int(__import__('time').time()*1000)})+'\n')
-            except: pass
-            # #endregion
-            
             return fg
         except Exception as e:
             logger.info(f"Feature group not found, creating new one: {e}")
-            
-            # #region agent log
             try:
-                with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"hopsworks_client.py:get_or_create_feature_group","message":"Exception caught, creating new","data":{"error":str(e)},"timestamp":int(__import__('time').time()*1000)})+'\n')
-            except: pass
-            # #endregion
-            
-            try:
-                # For Hopsworks 4.2.x compatibility, ensure primary_key is a simple list of strings
                 pk_list = primary_key or ["game_id"]
                 if isinstance(pk_list, list) and len(pk_list) > 0:
-                    # Ensure it's a list of strings, not dicts
                     pk_list = [str(pk) if not isinstance(pk, str) else pk for pk in pk_list]
                 
-                # #region agent log
-                try:
-                    with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"hopsworks_client.py:get_or_create_feature_group","message":"Creating feature group","data":{"primary_key":pk_list,"primary_key_type":str(type(pk_list))},"timestamp":int(__import__('time').time()*1000)})+'\n')
-                except: pass
-                # #endregion
-                
-                # Create feature group with explicit parameters for 4.2.x compatibility
                 fg = self.fs.create_feature_group(
                     name=name,
                     version=version,
                     description=description,
                     primary_key=pk_list,
                     online_enabled=True,
-                    # For 4.2.x, don't use event_time or partition_key if not needed
                 )
-                
-                # #region agent log
-                try:
-                    with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"hopsworks_client.py:get_or_create_feature_group","message":"After create_feature_group","data":{"fg_is_none":fg is None,"fg_type":str(type(fg)) if fg is not None else "None"},"timestamp":int(__import__('time').time()*1000)})+'\n')
-                except: pass
-                # #endregion
                 
                 if fg is None:
                     raise ValueError(f"create_feature_group returned None for {name} v{version}")
@@ -169,26 +119,10 @@ class HopsworksClient:
                 return fg
             except Exception as e2:
                 logger.error(f"Failed to create feature group: {e2}")
-                
-                # #region agent log
-                try:
-                    with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"hopsworks_client.py:get_or_create_feature_group","message":"Function exit (error)","data":{"error":str(e2)},"timestamp":int(__import__('time').time()*1000)})+'\n')
-                except: pass
-                # #endregion
-                
                 raise
     
     def insert_features(self, feature_group, df: pd.DataFrame):
         """Insert features into feature group"""
-        # #region agent log
-        import json
-        try:
-            with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"G","location":"hopsworks_client.py:insert_features","message":"Function entry","data":{"df_len":len(df),"df_columns":list(df.columns),"game_id_dtype":str(df['game_id'].dtype) if 'game_id' in df.columns else None},"timestamp":int(__import__('time').time()*1000)})+'\n')
-        except: pass
-        # #endregion
-        
         # Ensure game_id is int64 for primary key compatibility
         if 'game_id' in df.columns:
             df['game_id'] = df['game_id'].astype('int64')
@@ -199,14 +133,6 @@ class HopsworksClient:
     
     def get_features(self, feature_group, filters: Optional[Dict] = None) -> pd.DataFrame:
         """Retrieve features from feature group"""
-        # #region agent log
-        import json
-        try:
-            with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"F","location":"hopsworks_client.py:get_features","message":"Function entry","data":{"feature_group_name":feature_group.name if feature_group else None,"feature_group_version":feature_group.version if feature_group else None},"timestamp":int(__import__('time').time()*1000)})+'\n')
-        except: pass
-        # #endregion
-        
         # Try online feature store first (faster and more reliable)
         # Then fallback to offline methods if needed
         read_methods = [
@@ -226,23 +152,10 @@ class HopsworksClient:
                     for key, value in filters.items():
                         result = result[result[key] == value]
                 
-                # #region agent log
-                try:
-                    with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"F","location":"hopsworks_client.py:get_features","message":f"Function exit ({method_name})","data":{"result_len":len(result) if result is not None else 0,"result_type":str(type(result))},"timestamp":int(__import__('time').time()*1000)})+'\n')
-                except: pass
-                # #endregion
-                
                 logger.info(f"Successfully read {len(result)} rows using {method_name}")
                 return result
             except Exception as e:
                 logger.debug(f"{method_name} failed: {e}")
-                # #region agent log
-                try:
-                    with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"F","location":"hopsworks_client.py:get_features","message":f"{method_name} failed","data":{"error":str(e)},"timestamp":int(__import__('time').time()*1000)})+'\n')
-                except: pass
-                # #endregion
                 continue
         
         # All methods failed - this is a schema/version compatibility issue
@@ -262,13 +175,6 @@ class HopsworksClient:
         logger.error("  pip install 'hopsworks==4.2.*'")
         logger.error("")
         logger.error("="*80)
-        
-        # #region agent log
-        try:
-            with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"F","location":"hopsworks_client.py:get_features","message":"All read methods failed - manual intervention needed","data":{"feature_group_name":feature_group.name,"feature_group_version":feature_group.version},"timestamp":int(__import__('time').time()*1000)})+'\n')
-        except: pass
-        # #endregion
         
         raise Exception(
             f"All read methods failed for feature group {feature_group.name} v{feature_group.version}. "
@@ -336,20 +242,15 @@ class HopsworksClient:
         if download_path is None:
             download_path = f"models/{model_registry_entry.name}"
         
-        # If overwrite is True, remove existing directory first
         if overwrite and os.path.exists(download_path):
             logger.info(f"Removing existing model directory: {download_path}")
             shutil.rmtree(download_path)
         
         os.makedirs(download_path, exist_ok=True)
         
-        # Download model files with overwrite option
         try:
-            # Try with overwrite parameter if available
             model_registry_entry.download(download_path, overwrite=overwrite)
         except TypeError:
-            # If overwrite parameter not supported, download normally
-            # (we already cleaned up the directory above if overwrite=True)
             model_registry_entry.download(download_path)
         
         # Find the model file (could be .pkl, .joblib, etc.)

@@ -9,13 +9,9 @@ nhl_api:
 
 # Feature Engineering
 features:
-  # Rolling window sizes (in games)
   rolling_window: 10
-  # Days of historical data to fetch for training (more = more training data)
-  training_data_days: 365  # Full season of data for better model performance
-  # Days of historical data to fetch for inference feature computation
-  inference_historical_days: 90  # Recent history for computing rolling features
-  # Features to compute
+  training_data_days: 365
+  inference_historical_days: 90
   compute_features:
     - team_win_streak
     - team_loss_streak
@@ -25,16 +21,14 @@ features:
     - goalie_save_percentage
     - head_to_head_record
     - home_away_record
-  # Days to look ahead for predictions
   prediction_horizon_days: 3
 
 # Model Training
 training:
-  model_type: "xgboost"  # Using XGBoost only
+  model_type: "xgboost"
   test_size: 0.2
   validation_size: 0.1
   random_state: 42
-  # Hyperparameters (can be tuned)
   hyperparameters:
     n_estimators: 100
     max_depth: 6
@@ -44,10 +38,8 @@ training:
 
 # Hopsworks Configuration
 hopsworks:
-  # Project name (can be overridden by HOPSWORKS_PROJECT_NAME env var)
-  project_name: "SML_lab"  # Update this to your Hopsworks project name
-  # Host (can be overridden by HOPSWORKS_HOST env var)
-  host: "c.app.hopsworks.ai"  # Default Hopsworks host
+  project_name: "SML_lab"
+  host: "c.app.hopsworks.ai"
 
 # Feature Store (Hopsworks)
 feature_store:
@@ -58,12 +50,12 @@ feature_store:
 # Model Registry (Hopsworks)
 model_registry:
   model_name: "nhl_game_predictor"
-  model_version: 2  # Specify model version to use (None for latest)
+  model_version: 2
   model_description: "Gradient boosted tree model for predicting NHL game outcomes"
 
 # Dashboard
 dashboard:
   host: "0.0.0.0"
-  port: 5001  # Changed from 5000 (macOS AirPlay uses 5000)
+  port: 5001
   debug: false
 

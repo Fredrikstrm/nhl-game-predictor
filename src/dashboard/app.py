@@ -45,8 +45,8 @@ def index():
 def get_metadata():
     config = load_config()
     
-    # Try to get feature count from model
-    feature_count = 25  # Default
+        # Try to get feature count from model
+    feature_count = 25      
     try:
         import joblib
         from pathlib import Path
@@ -60,7 +60,7 @@ def get_metadata():
                 if hasattr(booster, 'feature_names') and booster.feature_names:
                     feature_count = len(booster.feature_names)
     except Exception:
-        pass  # Use default
+        pass
     
     return jsonify({
         'prediction_horizon_days': config['features']['prediction_horizon_days'],
@@ -83,7 +83,6 @@ def get_predictions():
             'error': 'No predictions available. Please run the inference pipeline first.'
         }), 404
     
-    # Convert to JSON format
     predictions = predictions_df.to_dict('records')
     
     return jsonify({

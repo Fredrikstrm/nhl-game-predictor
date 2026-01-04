@@ -19,7 +19,6 @@ class NHLAPIClient:
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
         self.session = requests.Session()
-        # Some endpoints may require following redirects
         self.session.max_redirects = 5
     
     def _make_request(self, endpoint: str, params: Optional[Dict] = None, follow_redirects: bool = False) -> Dict:
@@ -156,9 +155,9 @@ class NHLAPIClient:
         """
         Get team statistics
         Args:
-            team_code: Three-letter team code (e.g., 'TOR', 'EDM')
-            season: Season in YYYYMMYY format (e.g., '20232024') (optional)
-            game_type: Game type (2 for regular season, 3 for playoffs)
+            team_code: Team ID
+            season: Season in YYYY format
+            game_type: Game type 
         Returns:
             Team stats dictionary
         """

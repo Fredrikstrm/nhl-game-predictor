@@ -36,60 +36,27 @@ def prepare_features(df: pd.DataFrame) -> tuple:
     
     # Ensure target is binary integer (0 or 1) for XGBoost
     y = y.astype(int)
-    
-    # #region agent log
-    import json
-    try:
-        with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"H","location":"training_pipeline/main.py:prepare_features","message":"Function exit","data":{"y_dtype":str(y.dtype),"y_min":int(y.min()) if len(y) > 0 else None,"y_max":int(y.max()) if len(y) > 0 else None,"y_unique":list(y.unique()) if len(y) > 0 else None},"timestamp":int(__import__('time').time()*1000)})+'\n')
-    except: pass
-    # #endregion
-    
     return X, y, feature_cols
 
 
 def train_model(X_train, y_train, X_val, y_val, config: dict):
     """Train XGBoost model"""
     hyperparams = config['training']['hyperparameters']
-    
-    # #region agent log
-    import json
-    try:
-        with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"I","location":"training_pipeline/main.py:train_model","message":"Function entry","data":{"y_train_dtype":str(y_train.dtype),"y_train_min":int(y_train.min()) if len(y_train) > 0 else None,"y_train_max":int(y_train.max()) if len(y_train) > 0 else None,"y_train_unique":list(y_train.unique()) if len(y_train) > 0 else None},"timestamp":int(__import__('time').time()*1000)})+'\n')
-    except: pass
-    # #endregion
-    
-    # Ensure target values are in [0, 1] range for binary classification
+
     y_train_binary = y_train.astype(int)
     y_val_binary = y_val.astype(int)
-    
-    # #region agent log
-    try:
-        with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"I","location":"training_pipeline/main.py:train_model","message":"After binary conversion","data":{"y_train_binary_dtype":str(y_train_binary.dtype),"y_train_binary_min":int(y_train_binary.min()) if len(y_train_binary) > 0 else None,"y_train_binary_max":int(y_train_binary.max()) if len(y_train_binary) > 0 else None,"y_train_binary_unique":list(y_train_binary.unique()) if len(y_train_binary) > 0 else None,"y_train_mean":float(y_train_binary.mean()) if len(y_train_binary) > 0 else None},"timestamp":int(__import__('time').time()*1000)})+'\n')
-    except: pass
-    # #endregion
     
     # Verify target is binary
     if not set(y_train_binary.unique()).issubset({0, 1}):
         raise ValueError(f"Target must be binary (0/1), but found values: {y_train_binary.unique()}")
     
-    # Calculate base_score as the mean of positive class (must be in [0,1])
+    # Calculate base_score as the mean of positive class
     base_score = float(y_train_binary.mean())
-    # Ensure base_score is in valid range [0,1]
     base_score = max(0.0, min(1.0, base_score))
     if base_score == 0.0:
-        base_score = 0.01  # Avoid exactly 0
+        base_score = 0.01 
     elif base_score == 1.0:
-        base_score = 0.99  # Avoid exactly 1
-    
-    # #region agent log
-    try:
-        with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"I","location":"training_pipeline/main.py:train_model","message":"Before model creation","data":{"base_score":base_score},"timestamp":int(__import__('time').time()*1000)})+'\n')
-    except: pass
-    # #endregion
+        base_score = 0.99  
     
     # Remove base_score from hyperparams if present to avoid conflicts
     hyperparams_clean = {k: v for k, v in hyperparams.items() if k != 'base_score'}
@@ -98,8 +65,8 @@ def train_model(X_train, y_train, X_val, y_val, config: dict):
         **hyperparams_clean,
         random_state=config['training']['random_state'],
         eval_metric='logloss',
-        objective='binary:logistic',  # Explicitly set binary classification objective
-        base_score=base_score  # Explicitly set base_score to avoid auto-calculation issues
+        objective='binary:logistic', 
+        base_score=base_score 
     )
     model.fit(
         X_train, y_train_binary,
@@ -124,25 +91,15 @@ def evaluate_model(model, X_test, y_test):
     if len(y_test_counts) == 1:
         logger.warning(f"WARNING: Test set contains only one class ({list(y_test_counts.keys())[0]}). Metrics may be unreliable.")
     
-    # #region agent log
-    import json
-    try:
-        with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"J","location":"training_pipeline/main.py:evaluate_model","message":"Function entry","data":{"y_test_dtype":str(y_test.dtype),"y_test_binary_dtype":str(y_test_binary.dtype),"y_test_binary_min":int(y_test_binary.min()) if len(y_test_binary) > 0 else None,"y_test_binary_max":int(y_test_binary.max()) if len(y_test_binary) > 0 else None,"y_test_binary_unique":list(y_test_binary.unique()) if len(y_test_binary) > 0 else None,"y_test_binary_counts":dict(y_test_binary.value_counts().to_dict()) if len(y_test_binary) > 0 else None},"timestamp":int(__import__('time').time()*1000)})+'\n')
-    except: pass
-    # #endregion
-    
     y_pred = model.predict(X_test)
     y_pred_proba = model.predict_proba(X_test)[:, 1]
     
     accuracy = accuracy_score(y_test_binary, y_pred)
-    # Explicitly provide labels to log_loss to handle edge cases where test set might have only one class
     logloss = log_loss(y_test_binary, y_pred_proba, labels=[0, 1])
     
-    # Calculate ROC AUC, but handle case where it's undefined (only one class in test set)
+    # Calculate ROC AUC
     try:
         roc_auc = roc_auc_score(y_test_binary, y_pred_proba)
-        # Check if ROC AUC is NaN (happens when test set has only one class)
         if pd.isna(roc_auc) or np.isnan(roc_auc):
             roc_auc = None
             logger.warning("ROC AUC is undefined (test set has only one class), excluding from metrics")
@@ -152,22 +109,13 @@ def evaluate_model(model, X_test, y_test):
         # ROC AUC can't be computed (only one class)
         roc_auc = None
         logger.warning(f"ROC AUC cannot be computed: {e}, excluding from metrics")
-    
-    # Build metrics dict, excluding NaN/None values
+
     metrics = {
         'accuracy': float(accuracy),
         'log_loss': float(logloss)
     }
-    # Only include ROC AUC if it's a valid number
     if roc_auc is not None:
         metrics['roc_auc'] = roc_auc
-    
-    # #region agent log
-    try:
-        with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"J","location":"training_pipeline/main.py:evaluate_model","message":"Function exit","data":{"metrics":metrics,"roc_auc_value":roc_auc},"timestamp":int(__import__('time').time()*1000)})+'\n')
-    except: pass
-    # #endregion
     
     logger.info(f"Model Metrics: {metrics}")
     return metrics
@@ -208,7 +156,6 @@ def main():
     y_pct = (y.value_counts(normalize=True) * 100).to_dict()
     logger.info(f"Full dataset class distribution: {y_counts} ({y_pct[0]:.1f}% class 0, {y_pct[1]:.1f}% class 1)")
     
-    # Check if stratification is possible (need at least 2 samples per class)
     min_class_count = min(y_counts.values())
     if min_class_count < 2:
         logger.warning(f"Stratification may fail: minimum class count is {min_class_count} (need at least 2 per class)")

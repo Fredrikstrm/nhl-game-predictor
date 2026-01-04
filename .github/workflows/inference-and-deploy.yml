@@ -2,9 +2,8 @@ name: Run Inference and Deploy Dashboard
 
 on:
   schedule:
-    # Run daily at 8 AM UTC (adjust timezone as needed)
     - cron: '0 8 * * *'
-  workflow_dispatch:  # Allow manual trigger from GitHub UI
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -34,8 +33,6 @@ jobs:
     - name: Run Inference Pipeline
       env:
         HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
-        # Project name and host are read from config.yaml if not set as env vars
-        # You can override by adding them as secrets if needed
       run: |
         echo "Running inference pipeline..."
         python src/inference_pipeline/main.py
@@ -51,7 +48,5 @@ jobs:
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./docs
-        # publish_branch defaults to 'gh-pages' - this is the standard approach
-        # GitHub Pages should be configured to deploy from 'gh-pages' branch
-        cname: false  # Set to true if you have a custom domain
+        cname: false
 
