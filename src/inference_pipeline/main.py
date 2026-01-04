@@ -387,29 +387,49 @@ def main():
     all_upcoming_games = api_client.get_upcoming_games(days_ahead=days_ahead)
     
     # Filter to only include scheduled games (not final, not cancelled) within date range
-    today = datetime.now().date()
-    end_date = today + timedelta(days=days_ahead)
+    # Use UTC for consistent date comparison (GitHub Actions runs in UTC)
+    now_utc = datetime.utcnow()
+    today_utc = now_utc.date()
+    end_date = today_utc + timedelta(days=days_ahead)
+    
+    logger.info(f"Filtering games from {today_utc} to {end_date} (UTC)")
     
     upcoming_games = []
     for game in all_upcoming_games:
         # Check game status - only include scheduled/upcoming games
         game_status = game.get("gameState") or game.get("status", {}).get("detailedState") or game.get("gameStatus")
+        # Exclude games that are already finished (FINAL/OFFICIAL)
         is_final = game_status in ["OFF", "FINAL", "Final", "OFFICIAL"]
         is_cancelled = game_status in ["CANCELLED", "POSTPONED", "DELAYED"]
         
+        # Exclude games that are already final or cancelled
         if is_final or is_cancelled:
+            logger.debug(f"Skipping game {game.get('gamePk', 'unknown')}: status={game_status}")
             continue
         
-        # Check game date is within range
+        # Check game date is in the future and within range
         game_date_str = game.get('startTimeUTC') or game.get('gameDate') or game.get('date')
         if game_date_str:
             try:
-                game_date = pd.to_datetime(game_date_str).date()
-                if today <= game_date <= end_date:
+                # Parse game date (assume UTC if timezone not specified)
+                game_datetime = pd.to_datetime(game_date_str, utc=True)
+                game_date = game_datetime.date()
+                
+                # Exclude games from past dates (before today)
+                if game_date < today_utc:
+                    logger.debug(f"Skipping past game {game.get('gamePk', 'unknown')}: date={game_date} < today={today_utc}")
+                    continue
+                
+                # Include if within date range (today to end_date)
+                if game_date <= end_date:
                     upcoming_games.append(game)
+                else:
+                    logger.debug(f"Skipping future game {game.get('gamePk', 'unknown')}: date={game_date} > end_date={end_date}")
             except Exception as e:
                 logger.debug(f"Could not parse game date {game_date_str}: {e}")
                 continue
+        else:
+            logger.debug(f"Skipping game {game.get('gamePk', 'unknown')}: no date found")
     
     logger.info(f"Found {len(upcoming_games)} upcoming games (filtered from {len(all_upcoming_games)} total)")
     
