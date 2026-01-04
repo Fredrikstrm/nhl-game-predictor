@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 import pandas as pd
 import joblib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -388,7 +388,7 @@ def main():
     
     # Filter to only include scheduled games (not final, not cancelled) within date range
     # Use UTC for consistent date comparison (GitHub Actions runs in UTC)
-    now_utc = datetime.utcnow()
+    now_utc = datetime.now(timezone.utc)
     today_utc = now_utc.date()
     end_date = today_utc + timedelta(days=days_ahead)
     

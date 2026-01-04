@@ -6,7 +6,7 @@ Based on official NHL API documentation
 import requests
 import time
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -77,8 +77,12 @@ class NHLAPIClient:
         return games
     
     def get_upcoming_games(self, days_ahead: int = 3) -> List[Dict]:
-        """Get upcoming games for the next N days"""
-        today = datetime.now().date()
+        """
+        Get upcoming games for the next N days
+        Uses UTC for consistent date calculation across timezones
+        """
+        # Use UTC to ensure consistency (important for GitHub Actions which runs in UTC)
+        today = datetime.now(timezone.utc).date()
         end_date = today + timedelta(days=days_ahead)
         
         return self.get_schedule(
