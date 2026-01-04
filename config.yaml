@@ -42,6 +42,13 @@ training:
     subsample: 0.8
     colsample_bytree: 0.8
 
+# Hopsworks Configuration
+hopsworks:
+  # Project name (can be overridden by HOPSWORKS_PROJECT_NAME env var)
+  project_name: "SML_project"  # Update this to your Hopsworks project name
+  # Host (can be overridden by HOPSWORKS_HOST env var)
+  host: "c.app.hopsworks.ai"  # Default Hopsworks host
+
 # Feature Store (Hopsworks)
 feature_store:
   feature_group_name: "nhl_game_features"

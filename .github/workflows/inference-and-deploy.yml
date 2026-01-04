@@ -33,9 +33,9 @@ jobs:
     
     - name: Run Inference Pipeline
       env:
-        HOPSWORKS_HOST: ${{ secrets.HOPSWORKS_HOST }}
-        HOPSWORKS_PROJECT_NAME: ${{ secrets.HOPSWORKS_PROJECT_NAME }}
         HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+        # Project name and host are read from config.yaml if not set as env vars
+        # You can override by adding them as secrets if needed
       run: |
         echo "Running inference pipeline..."
         python src/inference_pipeline/main.py
