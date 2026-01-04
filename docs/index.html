@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NHL Game Predictor Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .games-container {
+            display: grid;
+            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        }
+        
+        .game-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+        
+        .game-date {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .teams {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .team {
+            flex: 1;
+            text-align: center;
+        }
+        
+        .team-name {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .vs {
+            font-weight: bold;
+            color: #999;
+            margin: 0 15px;
+        }
+        
+        .probability {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #667eea;
+            margin-top: 5px;
+        }
+        
+        .predicted-winner {
+            text-align: center;
+            margin-top: 20px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 8px;
+        }
+        
+        .predicted-winner-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .predicted-winner-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.2em;
+            margin-top: 50px;
+        }
+        
+        .error {
+            background: #ff6b6b;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .refresh-btn {
+            display: block;
+            margin: 20px auto;
+            padding: 12px 30px;
+            background: white;
+            color: #667eea;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.2s ease;
+        }
+        
+        .refresh-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        .stats {
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+            font-size: 1.1em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏒 NHL Game Predictor</h1>
+            <p class="subtitle">Win Probability Predictions for Upcoming Games</p>
+            <div class="info-panel" style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-top: 20px; color: white;">
+                <p style="margin: 5px 0;"><strong>Course:</strong> Scalable Machine Learning (ID2223)</p>
+                <p style="margin: 5px 0;"><strong>Prediction Horizon:</strong> <span id="horizon-days">3</span> days ahead</p>
+                <p style="margin: 5px 0;"><strong>Model:</strong> <span id="model-info">XGBoost</span> trained on <span id="feature-count">25</span> features</p>
+                <p style="margin: 5px 0; font-size: 0.9em; opacity: 0.9;">Last updated: <span id="last-updated">-</span></p>
+            </div>
+        </header>
+        
+        <div class="stats" id="stats"></div>
+        
+        <button class="refresh-btn" onclick="loadPredictions(); loadMetadata();">🔄 Refresh Predictions</button>
+        
+        <div id="loading" class="loading">Loading predictions...</div>
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="games-container" class="games-container"></div>
+    </div>
+    
+    <script>
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+        }
+        
+        function formatProbability(prob) {
+            return (prob * 100).toFixed(1) + '%';
+        }
+        
+        function createGameCard(prediction) {
+            const homeProb = parseFloat(prediction.home_win_probability);
+            const awayProb = parseFloat(prediction.away_win_probability);
+            
+            return `
+                <div class="game-card">
+                    <div class="game-date">${formatDate(prediction.game_date)}</div>
+                    <div class="teams">
+                        <div class="team">
+                            <div class="team-name">${prediction.away_team_name}</div>
+                            <div class="probability">${formatProbability(awayProb)}</div>
+                        </div>
+                        <div class="vs">@</div>
+                        <div class="team">
+                            <div class="team-name">${prediction.home_team_name}</div>
+                            <div class="probability">${formatProbability(homeProb)}</div>
+                        </div>
+                    </div>
+                    <div class="predicted-winner">
+                        <div class="predicted-winner-label">Predicted Winner</div>
+                        <div class="predicted-winner-name">${prediction.predicted_winner}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadMetadata() {
+            try {
+                const response = await fetch('/api/metadata');
+                if (response.ok) {
+                    const metadata = await response.json();
+                    document.getElementById('horizon-days').textContent = metadata.prediction_horizon_days;
+                    document.getElementById('model-info').textContent = `${metadata.model_type} v${metadata.model_version}`;
+                    document.getElementById('feature-count').textContent = metadata.feature_count;
+                }
+            } catch (error) {
+                console.error('Failed to load metadata:', error);
+            }
+        }
+        
+        async function loadPredictions() {
+            const loadingEl = document.getElementById('loading');
+            const errorEl = document.getElementById('error');
+            const gamesContainer = document.getElementById('games-container');
+            const statsEl = document.getElementById('stats');
+            
+            loadingEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            gamesContainer.innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/predictions');
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load predictions');
+                }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                loadingEl.style.display = 'none';
+                
+                if (data.predictions && data.predictions.length > 0) {
+                    statsEl.textContent = `Showing ${data.count} upcoming game${data.count !== 1 ? 's' : ''}`;
+                    gamesContainer.innerHTML = data.predictions.map(createGameCard).join('');
+                } else {
+                    gamesContainer.innerHTML = '<div class="error">No upcoming games found</div>';
+                }
+            } catch (error) {
+                loadingEl.style.display = 'none';
+                errorEl.textContent = `Error: ${error.message}`;
+                errorEl.style.display = 'block';
+            }
+        }
+        
+        // Load metadata and predictions on page load
+        loadMetadata();
+        loadPredictions();
+        
+        // Static page - refresh button manually reloads embedded data
+    </script>
+
+    <script>
+        // Embedded predictions data (for static GitHub Pages)
+        const embeddedPredictions = {
+        "predictions": [
+                {
+                        "game_id": 2025020644,
+                        "game_date": "2026-01-03T17:00:00Z",
+                        "home_team_name": "DET",
+                        "away_team_name": "PIT",
+                        "home_win_probability": 0.3674443,
+                        "away_win_probability": 0.6325557,
+                        "predicted_winner": "PIT"
+                },
+                {
+                        "game_id": 2025020645,
+                        "game_date": "2026-01-03T20:00:00Z",
+                        "home_team_name": "NJD",
+                        "away_team_name": "UTA",
+                        "home_win_probability": 0.6114629,
+                        "away_win_probability": 0.3885371,
+                        "predicted_winner": "NJD"
+                },
+                {
+                        "game_id": 2025020646,
+                        "game_date": "2026-01-03T20:00:00Z",
+                        "home_team_name": "CBJ",
+                        "away_team_name": "BUF",
+                        "home_win_probability": 0.81325924,
+                        "away_win_probability": 0.18674076,
+                        "predicted_winner": "CBJ"
+                },
+                {
+                        "game_id": 2025020647,
+                        "game_date": "2026-01-03T20:30:00Z",
+                        "home_team_name": "EDM",
+                        "away_team_name": "PHI",
+                        "home_win_probability": 0.4718099,
+                        "away_win_probability": 0.52819014,
+                        "predicted_winner": "PHI"
+                },
+                {
+                        "game_id": 2025020648,
+                        "game_date": "2026-01-03T21:00:00Z",
+                        "home_team_name": "STL",
+                        "away_team_name": "MTL",
+                        "home_win_probability": 0.650852,
+                        "away_win_probability": 0.34914798,
+                        "predicted_winner": "STL"
+                },
+                {
+                        "game_id": 2025020649,
+                        "game_date": "2026-01-03T21:00:00Z",
+                        "home_team_name": "SJS",
+                        "away_team_name": "TBL",
+                        "home_win_probability": 0.7165218,
+                        "away_win_probability": 0.2834782,
+                        "predicted_winner": "SJS"
+                },
+                {
+                        "game_id": 2025020650,
+                        "game_date": "2026-01-04T00:00:00Z",
+                        "home_team_name": "OTT",
+                        "away_team_name": "WPG",
+                        "home_win_probability": 0.6916721,
+                        "away_win_probability": 0.3083279,
+                        "predicted_winner": "OTT"
+                },
+                {
+                        "game_id": 2025020651,
+                        "game_date": "2026-01-04T00:00:00Z",
+                        "home_team_name": "NYI",
+                        "away_team_name": "TOR",
+                        "home_win_probability": 0.73983073,
+                        "away_win_probability": 0.26016927,
+                        "predicted_winner": "NYI"
+                },
+                {
+                        "game_id": 2025020652,
+                        "game_date": "2026-01-04T00:00:00Z",
+                        "home_team_name": "WSH",
+                        "away_team_name": "CHI",
+                        "home_win_probability": 0.58238375,
+                        "away_win_probability": 0.41761625,
+                        "predicted_winner": "WSH"
+                },
+                {
+                        "game_id": 2025020653,
+                        "game_date": "2026-01-04T00:00:00Z",
+                        "home_team_name": "CAR",
+                        "away_team_name": "COL",
+                        "home_win_probability": 0.81147546,
+                        "away_win_probability": 0.18852454,
+                        "predicted_winner": "CAR"
+                },
+                {
+                        "game_id": 2025020654,
+                        "game_date": "2026-01-04T00:00:00Z",
+                        "home_team_name": "CGY",
+                        "away_team_name": "NSH",
+                        "home_win_probability": 0.4989642,
+                        "away_win_probability": 0.5010358,
+                        "predicted_winner": "NSH"
+                },
+                {
+                        "game_id": 2025020655,
+                        "game_date": "2026-01-04T02:00:00Z",
+                        "home_team_name": "LAK",
+                        "away_team_name": "MIN",
+                        "home_win_probability": 0.39406514,
+                        "away_win_probability": 0.60593486,
+                        "predicted_winner": "MIN"
+                },
+                {
+                        "game_id": 2025020656,
+                        "game_date": "2026-01-04T03:00:00Z",
+                        "home_team_name": "VAN",
+                        "away_team_name": "BOS",
+                        "home_win_probability": 0.695472,
+                        "away_win_probability": 0.304528,
+                        "predicted_winner": "VAN"
+                },
+                {
+                        "game_id": 2025020657,
+                        "game_date": "2026-01-04T19:00:00Z",
+                        "home_team_name": "DAL",
+                        "away_team_name": "MTL",
+                        "home_win_probability": 0.2881417,
+                        "away_win_probability": 0.7118583,
+                        "predicted_winner": "MTL"
+                },
+                {
+                        "game_id": 2025020658,
+                        "game_date": "2026-01-04T20:00:00Z",
+                        "home_team_name": "CBJ",
+                        "away_team_name": "PIT",
+                        "home_win_probability": 0.7283667,
+                        "away_win_probability": 0.27163333,
+                        "predicted_winner": "CBJ"
+                },
+                {
+                        "game_id": 2025020659,
+                        "game_date": "2026-01-04T22:00:00Z",
+                        "home_team_name": "FLA",
+                        "away_team_name": "COL",
+                        "home_win_probability": 0.57564086,
+                        "away_win_probability": 0.42435914,
+                        "predicted_winner": "FLA"
+                },
+                {
+                        "game_id": 2025020660,
+                        "game_date": "2026-01-05T00:00:00Z",
+                        "home_team_name": "NJD",
+                        "away_team_name": "CAR",
+                        "home_win_probability": 0.56910384,
+                        "away_win_probability": 0.43089616,
+                        "predicted_winner": "NJD"
+                },
+                {
+                        "game_id": 2025020661,
+                        "game_date": "2026-01-05T00:00:00Z",
+                        "home_team_name": "CHI",
+                        "away_team_name": "VGK",
+                        "home_win_probability": 0.80395144,
+                        "away_win_probability": 0.19604856,
+                        "predicted_winner": "CHI"
+                },
+                {
+                        "game_id": 2025020662,
+                        "game_date": "2026-01-06T00:00:00Z",
+                        "home_team_name": "NYR",
+                        "away_team_name": "UTA",
+                        "home_win_probability": 0.4482361,
+                        "away_win_probability": 0.5517639,
+                        "predicted_winner": "UTA"
+                },
+                {
+                        "game_id": 2025020663,
+                        "game_date": "2026-01-06T00:00:00Z",
+                        "home_team_name": "WSH",
+                        "away_team_name": "ANA",
+                        "home_win_probability": 0.52061266,
+                        "away_win_probability": 0.47938734,
+                        "predicted_winner": "WSH"
+                },
+                {
+                        "game_id": 2025020664,
+                        "game_date": "2026-01-06T00:30:00Z",
+                        "home_team_name": "OTT",
+                        "away_team_name": "DET",
+                        "home_win_probability": 0.5776406,
+                        "away_win_probability": 0.4223594,
+                        "predicted_winner": "OTT"
+                },
+                {
+                        "game_id": 2025020665,
+                        "game_date": "2026-01-06T02:30:00Z",
+                        "home_team_name": "CGY",
+                        "away_team_name": "SEA",
+                        "home_win_probability": 0.5334506,
+                        "away_win_probability": 0.4665494,
+                        "predicted_winner": "CGY"
+                },
+                {
+                        "game_id": 2025020666,
+                        "game_date": "2026-01-06T03:30:00Z",
+                        "home_team_name": "LAK",
+                        "away_team_name": "MIN",
+                        "home_win_probability": 0.39406514,
+                        "away_win_probability": 0.60593486,
+                        "predicted_winner": "MIN"
+                }
+        ],
+        "count": 23
+};
+        const embeddedMetadata = {
+        "prediction_horizon_days": 3,
+        "model_type": "XGBOOST",
+        "model_version": "2",
+        "feature_count": 25,
+        "course_name": "Scalable Machine Learning",
+        "course_code": "ID2223",
+        "last_updated": "2026-01-04 12:20:55 UTC"
+};
+        
+        // Override loadPredictions to use embedded data
+        const originalLoadPredictions = loadPredictions;
+        loadPredictions = function() {
+            const loadingEl = document.getElementById('loading');
+            const errorEl = document.getElementById('error');
+            const gamesContainer = document.getElementById('games-container');
+            const statsEl = document.getElementById('stats');
+            
+            loadingEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            gamesContainer.innerHTML = '';
+            
+            // Simulate async for consistency
+            setTimeout(() => {
+                loadingEl.style.display = 'none';
+                
+                if (embeddedPredictions.error) {
+                    errorEl.textContent = `Error: ${embeddedPredictions.error}`;
+                    errorEl.style.display = 'block';
+                    return;
+                }
+                
+                if (embeddedPredictions.predictions && embeddedPredictions.predictions.length > 0) {
+                    statsEl.textContent = `Showing ${embeddedPredictions.count} upcoming game${embeddedPredictions.count !== 1 ? 's' : ''}`;
+                    gamesContainer.innerHTML = embeddedPredictions.predictions.map(createGameCard).join('');
+                } else {
+                    gamesContainer.innerHTML = '<div class="error">No upcoming games found</div>';
+                }
+            }, 100);
+        };
+        
+        // Override loadMetadata to use embedded data
+        const originalLoadMetadata = loadMetadata;
+        loadMetadata = function() {
+            document.getElementById('horizon-days').textContent = embeddedMetadata.prediction_horizon_days;
+            document.getElementById('model-info').textContent = `${embeddedMetadata.model_type} v${embeddedMetadata.model_version}`;
+            document.getElementById('feature-count').textContent = embeddedMetadata.feature_count;
+            document.getElementById('last-updated').textContent = embeddedMetadata.last_updated;
+        };
+    </script>
+    
+</body>
+</html>
+

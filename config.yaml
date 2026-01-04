@@ -1,0 +1,62 @@
+# NHL Game Predictor Configuration
+
+# NHL API Settings
+# Using NHL Web API (api-web.nhle.com) as documented in official API docs
+nhl_api:
+  base_url: "https://api-web.nhle.com"
+  timeout: 30
+  retry_attempts: 3
+
+# Feature Engineering
+features:
+  # Rolling window sizes (in games)
+  rolling_window: 10
+  # Days of historical data to fetch for training (more = more training data)
+  training_data_days: 365  # Full season of data for better model performance
+  # Days of historical data to fetch for inference feature computation
+  inference_historical_days: 90  # Recent history for computing rolling features
+  # Features to compute
+  compute_features:
+    - team_win_streak
+    - team_loss_streak
+    - goal_differential
+    - power_play_percentage
+    - penalty_kill_percentage
+    - goalie_save_percentage
+    - head_to_head_record
+    - home_away_record
+  # Days to look ahead for predictions
+  prediction_horizon_days: 3
+
+# Model Training
+training:
+  model_type: "xgboost"  # Using XGBoost only
+  test_size: 0.2
+  validation_size: 0.1
+  random_state: 42
+  # Hyperparameters (can be tuned)
+  hyperparameters:
+    n_estimators: 100
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+
+# Feature Store (Hopsworks)
+feature_store:
+  feature_group_name: "nhl_game_features"
+  feature_group_version: 1
+  feature_group_description: "NHL game features including team performance, goalie stats, and special teams metrics"
+
+# Model Registry (Hopsworks)
+model_registry:
+  model_name: "nhl_game_predictor"
+  model_version: 2  # Specify model version to use (None for latest)
+  model_description: "Gradient boosted tree model for predicting NHL game outcomes"
+
+# Dashboard
+dashboard:
+  host: "0.0.0.0"
+  port: 5001  # Changed from 5000 (macOS AirPlay uses 5000)
+  debug: false
+

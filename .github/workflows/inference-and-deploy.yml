@@ -1,0 +1,55 @@
+name: Run Inference and Deploy Dashboard
+
+on:
+  schedule:
+    # Run daily at 8 AM UTC (adjust timezone as needed)
+    - cron: '0 8 * * *'
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/inference_pipeline/**'
+      - 'config.yaml'
+      - '.github/workflows/inference-and-deploy.yml'
+
+jobs:
+  inference-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run Inference Pipeline
+      env:
+        HOPSWORKS_HOST: ${{ secrets.HOPSWORKS_HOST }}
+        HOPSWORKS_PROJECT_NAME: ${{ secrets.HOPSWORKS_PROJECT_NAME }}
+        HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+      run: |
+        echo "Running inference pipeline..."
+        python src/inference_pipeline/main.py
+    
+    - name: Generate Static Dashboard
+      run: |
+        echo "Generating static dashboard..."
+        python scripts/generate_static_dashboard.py
+    
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      if: github.ref == 'refs/heads/main'
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs
+        cname: false  # Set to true if you have a custom domain
+

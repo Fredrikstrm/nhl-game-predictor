@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NHL Game Predictor Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .games-container {
+            display: grid;
+            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        }
+        
+        .game-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+        
+        .game-date {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .teams {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .team {
+            flex: 1;
+            text-align: center;
+        }
+        
+        .team-name {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .vs {
+            font-weight: bold;
+            color: #999;
+            margin: 0 15px;
+        }
+        
+        .probability {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #667eea;
+            margin-top: 5px;
+        }
+        
+        .predicted-winner {
+            text-align: center;
+            margin-top: 20px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 8px;
+        }
+        
+        .predicted-winner-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .predicted-winner-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.2em;
+            margin-top: 50px;
+        }
+        
+        .error {
+            background: #ff6b6b;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .refresh-btn {
+            display: block;
+            margin: 20px auto;
+            padding: 12px 30px;
+            background: white;
+            color: #667eea;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.2s ease;
+        }
+        
+        .refresh-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        .stats {
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+            font-size: 1.1em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏒 NHL Game Predictor</h1>
+            <p class="subtitle">Win Probability Predictions for Upcoming Games</p>
+            <div class="info-panel" style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-top: 20px; color: white;">
+                <p style="margin: 5px 0;"><strong>Course:</strong> Scalable Machine Learning (ID2223)</p>
+                <p style="margin: 5px 0;"><strong>Prediction Horizon:</strong> <span id="horizon-days">3</span> days ahead</p>
+                <p style="margin: 5px 0;"><strong>Model:</strong> <span id="model-info">XGBoost</span> trained on <span id="feature-count">25</span> features</p>
+                <p style="margin: 5px 0; font-size: 0.9em; opacity: 0.9;">Last updated: <span id="last-updated">-</span></p>
+            </div>
+        </header>
+        
+        <div class="stats" id="stats"></div>
+        
+        <button class="refresh-btn" onclick="loadPredictions()">🔄 Refresh Predictions</button>
+        
+        <div id="loading" class="loading">Loading predictions...</div>
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="games-container" class="games-container"></div>
+    </div>
+    
+    <script>
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+        }
+        
+        function formatProbability(prob) {
+            return (prob * 100).toFixed(1) + '%';
+        }
+        
+        function createGameCard(prediction) {
+            const homeProb = parseFloat(prediction.home_win_probability);
+            const awayProb = parseFloat(prediction.away_win_probability);
+            
+            return `
+                <div class="game-card">
+                    <div class="game-date">${formatDate(prediction.game_date)}</div>
+                    <div class="teams">
+                        <div class="team">
+                            <div class="team-name">${prediction.away_team_name}</div>
+                            <div class="probability">${formatProbability(awayProb)}</div>
+                        </div>
+                        <div class="vs">@</div>
+                        <div class="team">
+                            <div class="team-name">${prediction.home_team_name}</div>
+                            <div class="probability">${formatProbability(homeProb)}</div>
+                        </div>
+                    </div>
+                    <div class="predicted-winner">
+                        <div class="predicted-winner-label">Predicted Winner</div>
+                        <div class="predicted-winner-name">${prediction.predicted_winner}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadMetadata() {
+            try {
+                const response = await fetch('/api/metadata');
+                if (response.ok) {
+                    const metadata = await response.json();
+                    document.getElementById('horizon-days').textContent = metadata.prediction_horizon_days;
+                    document.getElementById('model-info').textContent = `${metadata.model_type} v${metadata.model_version}`;
+                    document.getElementById('feature-count').textContent = metadata.feature_count;
+                }
+            } catch (error) {
+                console.error('Failed to load metadata:', error);
+            }
+        }
+        
+        async function loadPredictions() {
+            const loadingEl = document.getElementById('loading');
+            const errorEl = document.getElementById('error');
+            const gamesContainer = document.getElementById('games-container');
+            const statsEl = document.getElementById('stats');
+            
+            loadingEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            gamesContainer.innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/predictions');
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load predictions');
+                }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                loadingEl.style.display = 'none';
+                
+                if (data.predictions && data.predictions.length > 0) {
+                    statsEl.textContent = `Showing ${data.count} upcoming game${data.count !== 1 ? 's' : ''}`;
+                    gamesContainer.innerHTML = data.predictions.map(createGameCard).join('');
+                } else {
+                    gamesContainer.innerHTML = '<div class="error">No upcoming games found</div>';
+                }
+            } catch (error) {
+                loadingEl.style.display = 'none';
+                errorEl.textContent = `Error: ${error.message}`;
+                errorEl.style.display = 'block';
+            }
+        }
+        
+        // Load metadata and predictions on page load
+        loadMetadata();
+        loadPredictions();
+        
+        // Auto-refresh every 5 minutes
+        setInterval(loadPredictions, 5 * 60 * 1000);
+    </script>
+</body>
+</html>
+
