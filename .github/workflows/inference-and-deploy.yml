@@ -51,6 +51,7 @@ jobs:
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./docs
-        publish_branch: main  # Deploy to main branch instead of gh-pages
+        # publish_branch defaults to 'gh-pages' - this is the standard approach
+        # GitHub Pages should be configured to deploy from 'gh-pages' branch
         cname: false  # Set to true if you have a custom domain
 
