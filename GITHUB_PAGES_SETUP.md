@@ -12,14 +12,14 @@ The GitHub Actions workflow (`.github/workflows/inference-and-deploy.yml`) will:
 
 ## Setup Steps
 
-### 1. Add GitHub Secrets
+### 1. Add GitHub Secret
 
 Go to your GitHub repository → Settings → Secrets and variables → Actions → New repository secret
 
-Add these secrets:
-- `HOPSWORKS_HOST` - Your Hopsworks host (e.g., `c.app.hopsworks.ai`)
-- `HOPSWORKS_PROJECT_NAME` - Your Hopsworks project name
+Add this secret:
 - `HOPSWORKS_API_KEY` - Your Hopsworks API key
+
+**Note:** The project name and host are read from `config.yaml` (under the `hopsworks` section). Make sure to update `config.yaml` with your Hopsworks project name before pushing.
 
 ### 2. Enable GitHub Pages
 

@@ -57,8 +57,8 @@ def fetch_historical_data_for_features(api_client: NHLAPIClient, days_back: int 
         try:
             daily_games = api_client.get_daily_scores(date=date_str)
             games.extend(daily_games)
-        except Exception as e:
-            logger.debug(f"Error fetching scores for {date_str}: {e}")
+        except Exception:
+            pass
         current_date += timedelta(days=1)
     
     games_data = []
@@ -208,7 +208,6 @@ def compute_features_for_upcoming_game(
     game_date_str = game.get('startTimeUTC') or game.get('gameDate') or game.get('date')
     
     if not game_id or not home_team_id or not away_team_id:
-        logger.warning(f"Missing required game data: game_id={game_id}, home_team_id={home_team_id}, away_team_id={away_team_id}")
         return pd.DataFrame()
     
     game_date = pd.to_datetime(game_date_str).date()
@@ -265,11 +264,6 @@ def compute_features_for_upcoming_game(
     if not away_team_name and team_name_mapping and away_team_id in team_name_mapping:
         away_team_name = team_name_mapping[away_team_id]
     
-    # Log feature values for debugging (first game only)
-    if not hasattr(compute_features_for_upcoming_game, '_logged_first'):
-        logger.info(f"Sample features for game {game_id}: home_win_streak={home_features.get('win_streak', 0)}, away_win_streak={away_features.get('win_streak', 0)}")
-        logger.info(f"Home team games: {len(home_team_games)}, Away team games: {len(away_team_games)}")
-        compute_features_for_upcoming_game._logged_first = True
     
     # Combine features
     feature_row = {
@@ -308,7 +302,7 @@ def generate_predictions(model, features_df: pd.DataFrame, training_feature_cols
         if missing_cols:
             logger.warning(f"Missing feature columns from training: {missing_cols}")
         if extra_cols:
-            logger.warning(f"Extra feature columns not in training: {extra_cols}")
+            logger.debug(f"Extra feature columns not in training: {extra_cols}")
         
         # Reorder to match training
         X = features_df[feature_cols].fillna(0)
@@ -316,21 +310,11 @@ def generate_predictions(model, features_df: pd.DataFrame, training_feature_cols
         # Fallback: use available columns
         feature_cols = available_feature_cols
         X = features_df[feature_cols].fillna(0)
-        logger.warning("No training feature columns provided - using inference columns (may cause mismatch)")
+        logger.debug("No training feature columns provided - using inference columns")
     
     # Log feature statistics for debugging
     logger.info(f"Using {len(feature_cols)} features for prediction")
-    logger.debug(f"Feature columns: {feature_cols[:10]}...")  # First 10
     
-    # Check if all features are the same (would explain identical predictions)
-    feature_variance = X.var()
-    zero_variance_features = feature_variance[feature_variance == 0].index.tolist()
-    if zero_variance_features:
-        logger.warning(f"Features with zero variance (all same values): {len(zero_variance_features)} features")
-        logger.warning(f"Zero variance features: {zero_variance_features}")
-        # Log the actual values for these features
-        for feat in zero_variance_features[:5]:  # First 5
-            logger.warning(f"  {feat}: all values = {X[feat].iloc[0]}")
     
     # Get predictions
     probabilities = model.predict_proba(X)[:, 1]  # Probability of home team winning
@@ -404,7 +388,6 @@ def main():
         
         # Exclude games that are already final or cancelled
         if is_final or is_cancelled:
-            logger.debug(f"Skipping game {game.get('gamePk', 'unknown')}: status={game_status}")
             continue
         
         # Check game date is in the future and within range
@@ -417,19 +400,15 @@ def main():
                 
                 # Exclude games from past dates (before today)
                 if game_date < today_utc:
-                    logger.debug(f"Skipping past game {game.get('gamePk', 'unknown')}: date={game_date} < today={today_utc}")
                     continue
                 
                 # Include if within date range (today to end_date)
                 if game_date <= end_date:
                     upcoming_games.append(game)
-                else:
-                    logger.debug(f"Skipping future game {game.get('gamePk', 'unknown')}: date={game_date} > end_date={end_date}")
-            except Exception as e:
-                logger.debug(f"Could not parse game date {game_date_str}: {e}")
+            except Exception:
                 continue
         else:
-            logger.debug(f"Skipping game {game.get('gamePk', 'unknown')}: no date found")
+            continue
     
     logger.info(f"Found {len(upcoming_games)} upcoming games (filtered from {len(all_upcoming_games)} total)")
     
@@ -446,8 +425,6 @@ def main():
     # Build team name mapping from upcoming games
     team_name_mapping = build_team_name_mapping(upcoming_games, historical_games)
     logger.info(f"Built team name mapping with {len(team_name_mapping)} teams")
-    if len(team_name_mapping) > 0:
-        logger.debug(f"Sample team mappings: {dict(list(team_name_mapping.items())[:5])}")
     
     # Compute features for each upcoming game
     all_features = []
@@ -477,41 +454,22 @@ def main():
         feature_cols = [col for col in features_df.columns if col not in 
                        ['game_id', 'game_date', 'home_team_id', 'away_team_id', 
                         'home_team_name', 'away_team_name']]
-        logger.info(f"Feature columns: {len(feature_cols)}")
-        # Check if features are all the same
-        sample_features = features_df[feature_cols].iloc[0]
-        logger.info(f"Sample features (first game): {dict(sample_features.head(10))}")
-        # Check feature variance
-        for col in feature_cols[:5]:  # Check first 5 features
-            unique_vals = features_df[col].nunique()
-            logger.debug(f"Feature {col}: {unique_vals} unique values, mean={features_df[col].mean():.4f}")
     
     # Get feature column names from model if available (XGBoost stores them)
     training_feature_cols = None
     try:
         if hasattr(model, 'feature_names_in_'):
             training_feature_cols = list(model.feature_names_in_)
-            logger.info(f"Retrieved {len(training_feature_cols)} feature names from model")
         elif hasattr(model, 'get_booster'):
-            # XGBoost sklearn wrapper
             booster = model.get_booster()
             if hasattr(booster, 'feature_names'):
                 training_feature_cols = booster.feature_names
-                logger.info(f"Retrieved {len(training_feature_cols)} feature names from XGBoost booster")
-    except Exception as e:
-        logger.warning(f"Could not retrieve feature names from model: {e}")
+    except Exception:
+        pass  # Feature names not available, will use inference columns
     
     # Generate predictions
     logger.info("Generating predictions...")
     predictions_df = generate_predictions(model, features_df, training_feature_cols)
-    
-    # Log prediction statistics
-    if len(predictions_df) > 0:
-        logger.info(f"Prediction statistics:")
-        logger.info(f"  Home win prob - min: {predictions_df['home_win_probability'].min():.4f}, "
-                   f"max: {predictions_df['home_win_probability'].max():.4f}, "
-                   f"mean: {predictions_df['home_win_probability'].mean():.4f}")
-        logger.info(f"  Unique probabilities: {predictions_df['home_win_probability'].nunique()}")
     
     # Remove duplicates from predictions (in case they still exist)
     initial_pred_count = len(predictions_df)

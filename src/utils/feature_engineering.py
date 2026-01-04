@@ -57,6 +57,10 @@ class FeatureEngineer:
             features['avg_goals_against'] = 0
         
         # Special teams (if available)
+        # NOTE: These features default to 0.0 because the NHL API endpoints we use
+        # (get_daily_scores) don't provide power play/penalty kill statistics.
+        # To improve model performance, these would need to be fetched from different
+        # API endpoints or computed from boxscore data if available.
         features['power_play_pct'] = self._compute_power_play_pct(recent_games)
         features['penalty_kill_pct'] = self._compute_penalty_kill_pct(recent_games)
         
@@ -74,11 +78,17 @@ class FeatureEngineer:
         return features
     
     def compute_goalie_features(self, goalie_stats: pd.DataFrame) -> Dict:
-        """Compute goalie performance features"""
+        """
+        Compute goalie performance features
+        
+        NOTE: Currently returns default values because the NHL API endpoints we use
+        (get_daily_scores) don't provide goalie statistics. To improve model performance,
+        goalie stats would need to be fetched from boxscore endpoints or team stats endpoints.
+        """
         if len(goalie_stats) == 0:
             return {
-                'goalie_save_pct': 0.9,  # Default
-                'goalie_goals_against_avg': 2.5,
+                'goalie_save_pct': 0.9,  # Default NHL average
+                'goalie_goals_against_avg': 2.5,  # Default NHL average
                 'recent_saves': 0
             }
         
@@ -97,14 +107,6 @@ class FeatureEngineer:
         team2_id: int
     ) -> Dict:
         """Compute head-to-head features between two teams"""
-        # #region agent log
-        import json
-        try:
-            with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"feature_engineering.py:compute_head_to_head_features","message":"Function entry","data":{"team1_id":team1_id,"team2_id":team2_id,"historical_games_len":len(historical_games),"columns":list(historical_games.columns) if len(historical_games) > 0 else []},"timestamp":int(__import__('time').time()*1000)})+'\n')
-        except: pass
-        # #endregion
-        
         if len(historical_games) == 0:
             return {
                 'h2h_team1_wins': 0,
@@ -113,18 +115,10 @@ class FeatureEngineer:
             }
         
         # Filter games between these two teams
-        # Use home_team_id and away_team_id instead of team1_id/team2_id
         h2h_games = historical_games[
             ((historical_games['home_team_id'] == team1_id) & (historical_games['away_team_id'] == team2_id)) |
             ((historical_games['home_team_id'] == team2_id) & (historical_games['away_team_id'] == team1_id))
         ]
-        
-        # #region agent log
-        try:
-            with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"feature_engineering.py:compute_head_to_head_features","message":"After filtering h2h games","data":{"h2h_games_len":len(h2h_games)},"timestamp":int(__import__('time').time()*1000)})+'\n')
-        except: pass
-        # #endregion
         
         if len(h2h_games) == 0:
             return {
@@ -135,18 +129,10 @@ class FeatureEngineer:
         
         # Count wins for each team
         # team1 wins when: (team1 is home and home won) OR (team1 is away and away won)
-        # Note: home_team_won indicates if home team won (1) or away team won (0)
         team1_wins = len(h2h_games[
             ((h2h_games['home_team_id'] == team1_id) & (h2h_games['home_team_won'] == 1)) |
             ((h2h_games['away_team_id'] == team1_id) & (h2h_games['home_team_won'] == 0))
         ])
-        
-        # #region agent log
-        try:
-            with open('/Users/fredrikstrom/Documents/KTH_Dokument/Scalable ML/project/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"feature_engineering.py:compute_head_to_head_features","message":"Function exit","data":{"team1_wins":team1_wins,"total_h2h_games":len(h2h_games)},"timestamp":int(__import__('time').time()*1000)})+'\n')
-        except: pass
-        # #endregion
         
         return {
             'h2h_team1_wins': team1_wins,
