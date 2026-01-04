@@ -45,7 +45,7 @@ training:
 # Hopsworks Configuration
 hopsworks:
   # Project name (can be overridden by HOPSWORKS_PROJECT_NAME env var)
-  project_name: "SML_project"  # Update this to your Hopsworks project name
+  project_name: "SML_lab"  # Update this to your Hopsworks project name
   # Host (can be overridden by HOPSWORKS_HOST env var)
   host: "c.app.hopsworks.ai"  # Default Hopsworks host
 
